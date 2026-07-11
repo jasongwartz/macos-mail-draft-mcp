@@ -1,9 +1,13 @@
 # macos-mail-draft-mcp
 
 An MCP (Model Context Protocol) server that creates email drafts in the macOS
-Mail app. Everything runs locally: the server drives Mail.app through
-AppleScript (`osascript`) — no network services, no credentials, and nothing is
-ever sent.
+Mail app. The server itself runs locally: it drives Mail.app through AppleScript
+(`osascript`), opens no network services of its own, and handles no credentials
+— it never sends an email. Note, however, that Mail owns the draft once it is
+saved: if the target account is an IMAP, Exchange, or Gmail account (anything
+other than "On My Mac"), Mail syncs the draft — including its body and
+attachments — to that account's mail server, just as it would for any draft you
+create by hand.
 
 ## Requirements
 
@@ -48,7 +52,9 @@ with "Not authorized to send Apple events", grant access under
 
 ## Tool: `create_mail_draft`
 
-Creates a draft in Mail's Drafts mailbox. Nothing is sent.
+Creates a draft in Mail's Drafts mailbox. No email is sent. If the draft is
+saved to a synced account (IMAP / Exchange / Gmail), Mail uploads it to that
+account's Drafts mailbox on the remote server.
 
 | Parameter           | Type                                          | Required | Description                                                                                                   |
 | ------------------- | --------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------- |
