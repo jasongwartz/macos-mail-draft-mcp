@@ -1,6 +1,6 @@
 import { stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { isAbsolute, join } from 'node:path';
+import { isAbsolute, join, sep } from 'node:path';
 
 import { runAppleScript, type OsaScriptRunner } from './applescript.ts';
 import { normalizeRecipient, type CreateDraftInput, type NormalizedRecipient } from './schema.ts';
@@ -130,6 +130,17 @@ async function resolveAttachment(path: string): Promise<string> {
   const expanded = path === '~' || path.startsWith('~/') ? join(homedir(), path.slice(1)) : path;
   if (!isAbsolute(expanded)) {
     throw new Error(`Attachment path must be absolute: ${path}`);
+  }
+  const hiddenComponent = expanded
+    .split(sep)
+    .find((component) => component.startsWith('.') && component !== '.' && component !== '..');
+  if (hiddenComponent !== undefined) {
+    throw new Error(
+      `Refusing to attach a file inside a hidden (dot-prefixed) path component ` +
+        `("${hiddenComponent}"): ${expanded}. Hidden directories commonly hold secrets ` +
+        `(SSH keys, credentials, tokens), so they are blocked. If this file is safe, ` +
+        `move or copy it to a non-hidden location and attach it from there.`,
+    );
   }
   let info;
   try {
