@@ -120,7 +120,6 @@ describe('createDraft', () => {
         bcc: ['bcc@example.com'],
         subject: 'Hi',
         body: 'Hello',
-        openComposeWindow: false,
         attachments: [attachmentPath],
       },
       () => Promise.resolve('99'),
@@ -132,7 +131,7 @@ describe('createDraft', () => {
     expect(audit).toMatchObject({
       event: 'mail-draft.created',
       draftId: '99',
-      visible: false,
+      visible: true,
       subject: 'Hi',
       to: ['to@example.com'],
       cc: ['cc@example.com'],
@@ -143,13 +142,14 @@ describe('createDraft', () => {
     expect((audit as { timestamp: string }).timestamp).toEqual(expect.any(String));
   });
 
-  it('records visible drafts as visible in the audit line', async () => {
+  it('records silent (background) drafts as not visible in the audit line', async () => {
     const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
-    await createDraft({ to: ['to@example.com'], subject: 'Hi', body: 'Hello' }, () =>
-      Promise.resolve('1'),
+    await createDraft(
+      { to: ['to@example.com'], subject: 'Hi', body: 'Hello', openComposeWindow: false },
+      () => Promise.resolve('1'),
     );
     const audit: unknown = JSON.parse((stderr.mock.calls[0]?.[0] as string).trimEnd());
-    expect(audit).toMatchObject({ visible: true, attachmentCount: 0 });
+    expect(audit).toMatchObject({ visible: false, attachmentCount: 0 });
   });
 
   it('opens a compose window by default', async () => {
