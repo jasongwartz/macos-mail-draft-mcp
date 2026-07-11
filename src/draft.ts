@@ -1,3 +1,4 @@
+import { execFile } from 'node:child_process';
 import { lstat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { isAbsolute, join, sep } from 'node:path';
@@ -155,13 +156,20 @@ interface DraftAuditRecord {
   readonly draftId: string;
 }
 
+const SYSLOG_TAG = 'macos-mail-draft-mcp';
+const LOGGER_PATH = '/usr/bin/logger';
+
 /**
- * Emits a single structured audit line to STDERR for every draft created so
- * that silent background drafts (openComposeWindow:false) leave a record of
- * what was drafted, to whom, and with which attachments.
+ * Emits a single structured audit record for every draft created so that
+ * silent background drafts (openComposeWindow:false) leave a record of what
+ * was drafted, to whom, and with which attachments.
  *
- * This deliberately writes to stderr: stdout is the MCP stdio transport
- * channel and must not be polluted.
+ * The record is written to two places:
+ * - STDERR (stdout is the MCP stdio transport channel and must not be
+ *   polluted), which is the source of truth; and
+ * - the macOS unified logging system via /usr/bin/logger, so the record
+ *   survives outside the MCP host's captured stderr and is visible in
+ *   Console.app / `log show`.
  */
 export function writeAuditLine(record: DraftAuditRecord): void {
   const line = JSON.stringify({
@@ -177,6 +185,31 @@ export function writeAuditLine(record: DraftAuditRecord): void {
     attachments: record.attachments,
   });
   process.stderr.write(`${line}\n`);
+  writeSystemLog(line);
+}
+
+/**
+ * Best-effort mirror of the audit line into the macOS unified logging system.
+ * Failures are swallowed: stderr is the source of truth, and logging must
+ * never block or fail draft creation. Query later with, e.g.:
+ *   log show --predicate 'eventMessage CONTAINS "mail-draft.created"' --info
+ */
+function writeSystemLog(line: string): void {
+  if (process.platform !== 'darwin') {
+    return;
+  }
+  try {
+    const child = execFile(LOGGER_PATH, ['-t', SYSLOG_TAG, line], () => {
+      // Ignore logger's exit status/output; this is best-effort.
+    });
+    // Guard against an async spawn failure (e.g. logger missing) surfacing as
+    // an unhandled 'error' event and crashing the process.
+    child.on('error', () => {
+      /* ignore */
+    });
+  } catch {
+    /* ignore */
+  }
 }
 
 async function resolveAttachments(paths: readonly string[]): Promise<readonly string[]> {
