@@ -36,17 +36,29 @@ export function normalizeRecipient(recipient: Recipient): NormalizedRecipient {
     : { address: recipient.address, name: recipient.name };
 }
 
+// Caps to keep the generated AppleScript within OS argument and execFile
+// maxBuffer limits and to avoid unwieldy scripts. Generous but bounded.
+const MAX_RECIPIENTS = 100;
+const MAX_ATTACHMENTS = 20;
+const MAX_SUBJECT_CHARS = 998; // RFC 5322 single-line length limit.
+const MAX_BODY_CHARS = 256 * 1024; // 256 KB of plain text.
+const MAX_ATTACHMENT_PATH_CHARS = 4096; // Typical PATH_MAX on macOS.
+
 export const createDraftShape = {
   to: z
     .array(recipientSchema)
     .min(1)
+    .max(MAX_RECIPIENTS)
     .describe('Primary recipients, as bare email addresses or {address, name} objects'),
-  cc: z.array(recipientSchema).optional().describe('CC recipients'),
-  bcc: z.array(recipientSchema).optional().describe('BCC recipients'),
-  subject: noControlCharacters(z.string()).describe('Subject line'),
-  body: noControlCharacters(z.string()).describe('Plain-text body of the draft'),
+  cc: z.array(recipientSchema).max(MAX_RECIPIENTS).optional().describe('CC recipients'),
+  bcc: z.array(recipientSchema).max(MAX_RECIPIENTS).optional().describe('BCC recipients'),
+  subject: noControlCharacters(z.string().max(MAX_SUBJECT_CHARS)).describe('Subject line'),
+  body: noControlCharacters(z.string().max(MAX_BODY_CHARS)).describe(
+    'Plain-text body of the draft',
+  ),
   attachments: z
-    .array(z.string().min(1))
+    .array(z.string().min(1).max(MAX_ATTACHMENT_PATH_CHARS))
+    .max(MAX_ATTACHMENTS)
     .optional()
     .describe('Absolute POSIX paths of files to attach (a leading "~" is expanded)'),
   sender: emailAddressSchema
