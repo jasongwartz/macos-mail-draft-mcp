@@ -190,22 +190,29 @@ export function writeAuditLine(record: DraftAuditRecord): void {
 
 /**
  * Best-effort mirror of the audit line into the macOS unified logging system.
- * Failures are swallowed: stderr is the source of truth, and logging must
- * never block or fail draft creation. Query later with, e.g.:
+ * The stderr line is the source of truth, so a system-log failure never blocks
+ * or fails draft creation — but it is reported on stderr rather than swallowed,
+ * so a broken audit path is visible. Query later with, e.g.:
  *   log show --predicate 'eventMessage CONTAINS "mail-draft.created"' --info
  */
 function writeSystemLog(line: string): void {
+  const warn = (detail: string): void => {
+    process.stderr.write(
+      `macos-mail-draft: could not mirror audit line to the system log: ${detail}\n`,
+    );
+  };
   try {
-    const child = execFile(LOGGER_PATH, ['-t', SYSLOG_TAG, line], () => {
-      // Ignore logger's exit status/output; this is best-effort.
+    // The execFile callback receives both spawn failures (e.g. logger missing)
+    // and non-zero exits, so it is the single place errors are reported.
+    execFile(LOGGER_PATH, ['-t', SYSLOG_TAG, line], (error, _stdout, stderr) => {
+      if (error === null) {
+        return;
+      }
+      const loggerStderr = stderr.trim();
+      warn(loggerStderr !== '' ? loggerStderr : error.message);
     });
-    // Guard against an async spawn failure (e.g. logger missing) surfacing as
-    // an unhandled 'error' event and crashing the process.
-    child.on('error', () => {
-      /* ignore */
-    });
-  } catch {
-    /* ignore */
+  } catch (error) {
+    warn(error instanceof Error ? error.message : String(error));
   }
 }
 
