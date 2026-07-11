@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -189,6 +189,24 @@ describe('createDraft', () => {
         () => Promise.resolve('0'),
       ),
     ).rejects.toThrow(/not found/);
+  });
+
+  it('rejects attachments inside a hidden (dot-prefixed) path component', async () => {
+    const hiddenDir = join(dir, '.ssh');
+    await mkdir(hiddenDir);
+    const secretPath = join(hiddenDir, 'id_rsa');
+    await writeFile(secretPath, 'PRIVATE KEY');
+    let ran = false;
+    await expect(
+      createDraft(
+        { to: ['to@example.com'], subject: 'Hi', body: 'Hello', attachments: [secretPath] },
+        () => {
+          ran = true;
+          return Promise.resolve('0');
+        },
+      ),
+    ).rejects.toThrow(/hidden \(dot-prefixed\)/);
+    expect(ran).toBe(false);
   });
 
   it('rejects attachments that are not regular files', async () => {
