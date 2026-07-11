@@ -103,6 +103,17 @@ export async function createDraft(
   run: OsaScriptRunner = runAppleScript,
 ): Promise<CreateDraftResult> {
   const attachments = await resolveAttachments(input.attachments ?? []);
+  const visible = input.openComposeWindow ?? true;
+  // Attachments must never be added by a silent background draft: the compose
+  // window is the one point where a human sees which files are being attached
+  // and to whom, so it is the safeguard against a prompt-injected caller
+  // staging file exfiltration unnoticed.
+  if (!visible && attachments.length > 0) {
+    throw new Error(
+      'Attachments require a visible compose window for review: set openComposeWindow to true ' +
+        '(or omit it) when attaching files. Silent background drafts cannot carry attachments.',
+    );
+  }
   const script = buildCreateDraftScript({
     subject: input.subject,
     body: input.body,
@@ -111,7 +122,7 @@ export async function createDraft(
     bcc: (input.bcc ?? []).map(normalizeRecipient),
     attachments,
     sender: input.sender,
-    visible: input.openComposeWindow ?? true,
+    visible,
   });
   const draftId = await run(script);
   const attachmentNote =

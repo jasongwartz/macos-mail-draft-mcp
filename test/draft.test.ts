@@ -191,6 +191,26 @@ describe('createDraft', () => {
     ).rejects.toThrow(/not found/);
   });
 
+  it('refuses attachments on a silent draft without running any script', async () => {
+    let ran = false;
+    await expect(
+      createDraft(
+        {
+          to: ['to@example.com'],
+          subject: 'Hi',
+          body: 'Hello',
+          openComposeWindow: false,
+          attachments: [attachmentPath],
+        },
+        () => {
+          ran = true;
+          return Promise.resolve('0');
+        },
+      ),
+    ).rejects.toThrow(/require a visible compose window/);
+    expect(ran).toBe(false);
+  });
+
   it('rejects attachments inside a hidden (dot-prefixed) path component', async () => {
     const hiddenDir = join(dir, '.ssh');
     await mkdir(hiddenDir);

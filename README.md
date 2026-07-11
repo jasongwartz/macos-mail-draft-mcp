@@ -50,15 +50,15 @@ with "Not authorized to send Apple events", grant access under
 
 Creates a draft in Mail's Drafts mailbox. Nothing is sent.
 
-| Parameter           | Type                                          | Required | Description                                                                                                   |
-| ------------------- | --------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------- |
-| `to`                | array of address strings or `{address, name}` | yes      | Primary recipients                                                                                            |
-| `subject`           | string                                        | yes      | Subject line                                                                                                  |
-| `body`              | string                                        | yes      | Plain-text body                                                                                               |
-| `cc` / `bcc`        | same shape as `to`                            | no       | CC / BCC recipients                                                                                           |
-| `attachments`       | array of absolute POSIX paths                 | no       | Files to attach (a leading `~` is expanded; files must exist)                                                 |
-| `sender`            | email address                                 | no       | Account address to send from; defaults to Mail's default account                                              |
-| `openComposeWindow` | boolean                                       | no       | Open the draft in a compose window and bring Mail to the front (default on); `false` saves silently to Drafts |
+| Parameter           | Type                                          | Required | Description                                                                                                                                                                                                                   |
+| ------------------- | --------------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `to`                | array of address strings or `{address, name}` | yes      | Primary recipients                                                                                                                                                                                                            |
+| `subject`           | string                                        | yes      | Subject line                                                                                                                                                                                                                  |
+| `body`              | string                                        | yes      | Plain-text body                                                                                                                                                                                                               |
+| `cc` / `bcc`        | same shape as `to`                            | no       | CC / BCC recipients                                                                                                                                                                                                           |
+| `attachments`       | array of absolute POSIX paths                 | no       | Files to attach (a leading `~` is expanded; files must exist)                                                                                                                                                                 |
+| `sender`            | email address                                 | no       | Account address to send from; defaults to Mail's default account                                                                                                                                                              |
+| `openComposeWindow` | boolean                                       | no       | Open the draft in a compose window and bring Mail to the front (default on); `false` saves silently to Drafts. Attachments are only allowed with the compose window open, so the files being attached are visible for review. |
 
 Example call:
 
