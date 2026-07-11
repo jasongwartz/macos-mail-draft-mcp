@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { buildCreateDraftScript, createDraft, type DraftScriptParams } from '../src/draft.ts';
 
@@ -105,6 +105,51 @@ describe('createDraft', () => {
 
   afterAll(async () => {
     await rm(dir, { recursive: true, force: true });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('writes a structured audit line to stderr for every draft', async () => {
+    const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+    await createDraft(
+      {
+        to: ['to@example.com'],
+        cc: ['cc@example.com'],
+        bcc: ['bcc@example.com'],
+        subject: 'Hi',
+        body: 'Hello',
+        openComposeWindow: false,
+        attachments: [attachmentPath],
+      },
+      () => Promise.resolve('99'),
+    );
+    expect(stderr).toHaveBeenCalledTimes(1);
+    const written = stderr.mock.calls[0]?.[0];
+    expect(typeof written).toBe('string');
+    const audit: unknown = JSON.parse((written as string).trimEnd());
+    expect(audit).toMatchObject({
+      event: 'mail-draft.created',
+      draftId: '99',
+      visible: false,
+      subject: 'Hi',
+      to: ['to@example.com'],
+      cc: ['cc@example.com'],
+      bcc: ['bcc@example.com'],
+      attachmentCount: 1,
+      attachments: [attachmentPath],
+    });
+    expect((audit as { timestamp: string }).timestamp).toEqual(expect.any(String));
+  });
+
+  it('records visible drafts as visible in the audit line', async () => {
+    const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+    await createDraft({ to: ['to@example.com'], subject: 'Hi', body: 'Hello' }, () =>
+      Promise.resolve('1'),
+    );
+    const audit: unknown = JSON.parse((stderr.mock.calls[0]?.[0] as string).trimEnd());
+    expect(audit).toMatchObject({ visible: true, attachmentCount: 0 });
   });
 
   it('opens a compose window by default', async () => {

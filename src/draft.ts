@@ -103,6 +103,9 @@ export async function createDraft(
   run: OsaScriptRunner = runAppleScript,
 ): Promise<CreateDraftResult> {
   const attachments = await resolveAttachments(input.attachments ?? []);
+  const to = input.to.map(normalizeRecipient);
+  const cc = (input.cc ?? []).map(normalizeRecipient);
+  const bcc = (input.bcc ?? []).map(normalizeRecipient);
   const visible = input.openComposeWindow ?? true;
   // Attachments must never be added by a silent background draft: the compose
   // window is the one point where a human sees which files are being attached
@@ -117,20 +120,63 @@ export async function createDraft(
   const script = buildCreateDraftScript({
     subject: input.subject,
     body: input.body,
-    to: input.to.map(normalizeRecipient),
-    cc: (input.cc ?? []).map(normalizeRecipient),
-    bcc: (input.bcc ?? []).map(normalizeRecipient),
+    to,
+    cc,
+    bcc,
     attachments,
     sender: input.sender,
     visible,
   });
   const draftId = await run(script);
+  writeAuditLine({
+    subject: input.subject,
+    to: to.map((r) => r.address),
+    cc: cc.map((r) => r.address),
+    bcc: bcc.map((r) => r.address),
+    attachments,
+    visible,
+    draftId,
+  });
   const attachmentNote =
     attachments.length > 0 ? ` with ${String(attachments.length)} attachment(s)` : '';
   return {
     draftId,
     message: `Created Mail draft "${input.subject}"${attachmentNote} (outgoing message id ${draftId}). It is saved in the Drafts mailbox.`,
   };
+}
+
+interface DraftAuditRecord {
+  readonly subject: string;
+  readonly to: readonly string[];
+  readonly cc: readonly string[];
+  readonly bcc: readonly string[];
+  readonly attachments: readonly string[];
+  readonly visible: boolean;
+  readonly draftId: string;
+}
+
+/**
+ * Emits a single structured audit line to STDERR for every draft created so
+ * that silent background drafts (openComposeWindow:false) leave a record of
+ * what was drafted, to whom, and with which attachments.
+ *
+ * This deliberately writes to stderr: stdout is the MCP stdio transport
+ * channel and must not be polluted.
+ */
+export function writeAuditLine(record: DraftAuditRecord): void {
+  const line = JSON.stringify({
+    event: 'mail-draft.created',
+    timestamp: new Date().toISOString(),
+    draftId: record.draftId,
+    visible: record.visible,
+    subject: record.subject,
+    to: record.to,
+    cc: record.cc,
+    bcc: record.bcc,
+    attachmentCount: record.attachments.length,
+    attachments: record.attachments,
+  });
+  process.stderr.write(`${line}\n`);
 }
 
 async function resolveAttachments(paths: readonly string[]): Promise<readonly string[]> {
