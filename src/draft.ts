@@ -1,3 +1,4 @@
+import { execFile } from 'node:child_process';
 import { lstat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { isAbsolute, join, sep } from 'node:path';
@@ -103,6 +104,9 @@ export async function createDraft(
   run: OsaScriptRunner = runAppleScript,
 ): Promise<CreateDraftResult> {
   const attachments = await resolveAttachments(input.attachments ?? []);
+  const to = input.to.map(normalizeRecipient);
+  const cc = (input.cc ?? []).map(normalizeRecipient);
+  const bcc = (input.bcc ?? []).map(normalizeRecipient);
   const visible = input.openComposeWindow ?? true;
   // Attachments must never be added by a silent background draft: the compose
   // window is the one point where a human sees which files are being attached
@@ -117,20 +121,99 @@ export async function createDraft(
   const script = buildCreateDraftScript({
     subject: input.subject,
     body: input.body,
-    to: input.to.map(normalizeRecipient),
-    cc: (input.cc ?? []).map(normalizeRecipient),
-    bcc: (input.bcc ?? []).map(normalizeRecipient),
+    to,
+    cc,
+    bcc,
     attachments,
     sender: input.sender,
     visible,
   });
   const draftId = await run(script);
+  writeAuditLine({
+    subject: input.subject,
+    to: to.map((r) => r.address),
+    cc: cc.map((r) => r.address),
+    bcc: bcc.map((r) => r.address),
+    attachments,
+    visible,
+    draftId,
+  });
   const attachmentNote =
     attachments.length > 0 ? ` with ${String(attachments.length)} attachment(s)` : '';
   return {
     draftId,
     message: `Created Mail draft "${input.subject}"${attachmentNote} (outgoing message id ${draftId}). It is saved in the Drafts mailbox.`,
   };
+}
+
+interface DraftAuditRecord {
+  readonly subject: string;
+  readonly to: readonly string[];
+  readonly cc: readonly string[];
+  readonly bcc: readonly string[];
+  readonly attachments: readonly string[];
+  readonly visible: boolean;
+  readonly draftId: string;
+}
+
+const SYSLOG_TAG = 'macos-mail-draft-mcp';
+const LOGGER_PATH = '/usr/bin/logger';
+
+/**
+ * Emits a single structured audit record for every draft created so that
+ * silent background drafts (openComposeWindow:false) leave a record of what
+ * was drafted, to whom, and with which attachments.
+ *
+ * The record is written to two places:
+ * - STDERR (stdout is the MCP stdio transport channel and must not be
+ *   polluted), which is the source of truth; and
+ * - the macOS unified logging system via /usr/bin/logger, so the record
+ *   survives outside the MCP host's captured stderr and is visible in
+ *   Console.app / `log show`.
+ */
+export function writeAuditLine(record: DraftAuditRecord): void {
+  const line = JSON.stringify({
+    event: 'mail-draft.created',
+    timestamp: new Date().toISOString(),
+    draftId: record.draftId,
+    visible: record.visible,
+    subject: record.subject,
+    to: record.to,
+    cc: record.cc,
+    bcc: record.bcc,
+    attachmentCount: record.attachments.length,
+    attachments: record.attachments,
+  });
+  process.stderr.write(`${line}\n`);
+  writeSystemLog(line);
+}
+
+/**
+ * Best-effort mirror of the audit line into the macOS unified logging system.
+ * The stderr line is the source of truth, so a system-log failure never blocks
+ * or fails draft creation — but it is reported on stderr rather than swallowed,
+ * so a broken audit path is visible. Query later with, e.g.:
+ *   log show --predicate 'eventMessage CONTAINS "mail-draft.created"' --info
+ */
+function writeSystemLog(line: string): void {
+  const warn = (detail: string): void => {
+    process.stderr.write(
+      `macos-mail-draft: could not mirror audit line to the system log: ${detail}\n`,
+    );
+  };
+  try {
+    // The execFile callback receives both spawn failures (e.g. logger missing)
+    // and non-zero exits, so it is the single place errors are reported.
+    execFile(LOGGER_PATH, ['-t', SYSLOG_TAG, line], (error, _stdout, stderr) => {
+      if (error === null) {
+        return;
+      }
+      const loggerStderr = stderr.trim();
+      warn(loggerStderr !== '' ? loggerStderr : error.message);
+    });
+  } catch (error) {
+    warn(error instanceof Error ? error.message : String(error));
+  }
 }
 
 async function resolveAttachments(paths: readonly string[]): Promise<readonly string[]> {
