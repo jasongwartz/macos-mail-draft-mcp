@@ -66,6 +66,40 @@ describe('createDraftInputSchema', () => {
     });
     expect(result.success).toBe(true);
   });
+
+  it('rejects an over-long subject', () => {
+    const result = createDraftInputSchema.safeParse({ ...minimalInput, subject: 'x'.repeat(999) });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects an over-long body', () => {
+    const result = createDraftInputSchema.safeParse({
+      ...minimalInput,
+      body: 'x'.repeat(256 * 1024 + 1),
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects too many recipients', () => {
+    const many = Array.from({ length: 101 }, (_, i) => `person${String(i)}@example.com`);
+    expect(createDraftInputSchema.safeParse({ ...minimalInput, to: many }).success).toBe(false);
+    expect(createDraftInputSchema.safeParse({ ...minimalInput, cc: many }).success).toBe(false);
+    expect(createDraftInputSchema.safeParse({ ...minimalInput, bcc: many }).success).toBe(false);
+  });
+
+  it('rejects too many attachments', () => {
+    const attachments = Array.from({ length: 21 }, (_, i) => `/tmp/file${String(i)}.txt`);
+    const result = createDraftInputSchema.safeParse({ ...minimalInput, attachments });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects an over-long attachment path', () => {
+    const result = createDraftInputSchema.safeParse({
+      ...minimalInput,
+      attachments: [`/tmp/${'x'.repeat(4097)}`],
+    });
+    expect(result.success).toBe(false);
+  });
 });
 
 describe('normalizeRecipient', () => {
