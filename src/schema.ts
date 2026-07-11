@@ -1,5 +1,16 @@
 import { z } from 'zod';
 
+// Reject NUL and other C0 control characters, except tab, newline, and carriage
+// return, which the AppleScript escaper handles. NUL in particular makes Node's
+// execFile throw an opaque error before the script ever runs.
+// eslint-disable-next-line no-control-regex
+const controlCharacters = /[\x00-\x08\x0B\x0C\x0E-\x1F]/;
+
+const noControlCharacters = (schema: z.ZodString): z.ZodString =>
+  schema.refine((value) => !controlCharacters.test(value), {
+    message: 'must not contain NUL or control characters',
+  });
+
 const emailAddressSchema = z.email().describe('An email address, e.g. "someone@example.com"');
 
 const recipientObjectSchema = z.strictObject({
@@ -32,8 +43,8 @@ export const createDraftShape = {
     .describe('Primary recipients, as bare email addresses or {address, name} objects'),
   cc: z.array(recipientSchema).optional().describe('CC recipients'),
   bcc: z.array(recipientSchema).optional().describe('BCC recipients'),
-  subject: z.string().describe('Subject line'),
-  body: z.string().describe('Plain-text body of the draft'),
+  subject: noControlCharacters(z.string()).describe('Subject line'),
+  body: noControlCharacters(z.string()).describe('Plain-text body of the draft'),
   attachments: z
     .array(z.string().min(1))
     .optional()
