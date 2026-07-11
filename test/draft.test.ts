@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -216,5 +216,21 @@ describe('createDraft', () => {
         () => Promise.resolve('0'),
       ),
     ).rejects.toThrow(/not a regular file/);
+  });
+
+  it('rejects a symlink pointing at a valid file without running any script', async () => {
+    const linkPath = join(dir, 'link.txt');
+    await symlink(attachmentPath, linkPath);
+    let ran = false;
+    await expect(
+      createDraft(
+        { to: ['to@example.com'], subject: 'Hi', body: 'Hello', attachments: [linkPath] },
+        () => {
+          ran = true;
+          return Promise.resolve('0');
+        },
+      ),
+    ).rejects.toThrow(/must not be a symlink/);
+    expect(ran).toBe(false);
   });
 });

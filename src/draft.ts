@@ -1,4 +1,4 @@
-import { stat } from 'node:fs/promises';
+import { lstat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { isAbsolute, join, sep } from 'node:path';
 
@@ -144,9 +144,12 @@ async function resolveAttachment(path: string): Promise<string> {
   }
   let info;
   try {
-    info = await stat(expanded);
+    info = await lstat(expanded);
   } catch {
     throw new Error(`Attachment not found: ${expanded}`);
+  }
+  if (info.isSymbolicLink()) {
+    throw new Error(`Attachment path must not be a symlink: ${expanded}`);
   }
   if (!info.isFile()) {
     throw new Error(`Attachment is not a regular file: ${expanded}`);
