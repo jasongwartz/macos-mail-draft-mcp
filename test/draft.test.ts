@@ -233,4 +233,24 @@ describe('createDraft', () => {
     ).rejects.toThrow(/must not be a symlink/);
     expect(ran).toBe(false);
   });
+
+  it('refuses attachments on a silent draft without running any script', async () => {
+    let ran = false;
+    await expect(
+      createDraft(
+        {
+          to: ['to@example.com'],
+          subject: 'Hi',
+          body: 'Hello',
+          openComposeWindow: false,
+          attachments: [attachmentPath],
+        },
+        () => {
+          ran = true;
+          return Promise.resolve('0');
+        },
+      ),
+    ).rejects.toThrow(/require a visible compose window/);
+    expect(ran).toBe(false);
+  });
 });
