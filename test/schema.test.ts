@@ -48,6 +48,24 @@ describe('createDraftInputSchema', () => {
     const result = createDraftInputSchema.safeParse({ ...minimalInput, attachments: [''] });
     expect(result.success).toBe(false);
   });
+
+  it('rejects a subject containing a NUL byte', () => {
+    const result = createDraftInputSchema.safeParse({ ...minimalInput, subject: 'Hel\x00lo' });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a body containing a NUL byte', () => {
+    const result = createDraftInputSchema.safeParse({ ...minimalInput, body: 'Hi\x00there' });
+    expect(result.success).toBe(false);
+  });
+
+  it('accepts a body with newlines, tabs, and carriage returns', () => {
+    const result = createDraftInputSchema.safeParse({
+      ...minimalInput,
+      body: 'Line one\nLine two\tindented\r\nLine three',
+    });
+    expect(result.success).toBe(true);
+  });
 });
 
 describe('normalizeRecipient', () => {
