@@ -5,7 +5,10 @@ import { createServer } from './server.ts';
 
 async function main(): Promise<void> {
   if (process.platform !== 'darwin') {
-    throw new Error('macos-mail-draft-mcp requires macOS (it drives Mail.app via AppleScript).');
+    throw new Error(
+      `macos-mail-draft-mcp requires macOS: it drives Mail.app via AppleScript and cannot ` +
+        `run anywhere else. Detected platform "${process.platform}".`,
+    );
   }
   const transport = new StdioServerTransport();
   await createServer().connect(transport);

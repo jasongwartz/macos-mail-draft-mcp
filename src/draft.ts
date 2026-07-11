@@ -195,9 +195,6 @@ export function writeAuditLine(record: DraftAuditRecord): void {
  *   log show --predicate 'eventMessage CONTAINS "mail-draft.created"' --info
  */
 function writeSystemLog(line: string): void {
-  if (process.platform !== 'darwin') {
-    return;
-  }
   try {
     const child = execFile(LOGGER_PATH, ['-t', SYSLOG_TAG, line], () => {
       // Ignore logger's exit status/output; this is best-effort.
